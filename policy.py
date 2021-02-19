@@ -1,7 +1,9 @@
 """Implementation of different types of policies"""
 import numpy as np
+import random
 
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from env import Action, Easy21, State
 
 
@@ -11,7 +13,6 @@ class Policy(ABC):
     def __init__(self):
         self._pi = np.full(Easy21.state_space, fill_value=Action.hit)
 
-    @abstractmethod
     def __setitem__(self, s: State, a: Action) -> None:
         """
         Sets the given action for the given state.
@@ -19,7 +20,7 @@ class Policy(ABC):
         :param State s: The state to update
         :param Action a: The action to assign to the state
         """
-        raise NotImplementedError
+        self._pi[s.dealer_first_card, s.player_sum] = a
 
     @abstractmethod
     def __getitem__(self, s: State) -> Action:
@@ -36,9 +37,34 @@ class Policy(ABC):
 class GreedyPolicy(Policy):
     """A greedy policy that selects actions based on its current mapping"""
 
-    def __setitem__(self, s: State, a: Action) -> None:
-        self._pi[s.dealer_first_card, s.player_sum] = a
-
     def __getitem__(self, s: State) -> Action:
         # Picks the action based on the current policy
+        return self._pi[s.dealer_first_card, s.player_sum]
+
+
+class EpsilonGreedyPolicy(Policy):
+    """
+    An epsilon greedy policy that selects random actions with probability epsilon.
+    It follows the exploration strategy described in the Easy21 assignment instructions.
+    """
+
+    def __init__(self, seed: int = None):
+        """
+        :param int seed: The seed to use for the random number generator
+        """
+        super().__init__()
+
+        random.seed(seed)
+        self._n0 = 100.
+        # Number of times a state has been visited
+        self._n = defaultdict(int)
+
+    def __getitem__(self, s: State) -> Action:
+        # Compute epsilon following the strategy outlined in the assignment instructions
+        self._n[s] += 1
+        epsilon = self._n0 / (self._n0 + self._n[s])
+
+        if random.random() < epsilon:
+            return random.choice([Action.hit, Action.stick])
+
         return self._pi[s.dealer_first_card, s.player_sum]

@@ -146,7 +146,7 @@ class Deck:
         :return: A card
         :rtype: Card
         """
-        value = random.randint(1, 11)
+        value = random.randint(1, 10)
         color = color or random.choices([Color.red, Color.black], weights=[1./3., 2./3.], k=1)[0]
         return Card(value, color)
 

@@ -9,7 +9,7 @@ from env import Action, Easy21, State
 from collections import defaultdict, namedtuple
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
-from policy import GreedyPolicy, Policy
+from policy import EpsilonGreedyPolicy, GreedyPolicy, Policy
 from typing import List
 from tqdm import tqdm
 
@@ -95,19 +95,60 @@ class MonteCarloES(MonteCarloControl):
         return np.max(Q, axis=2)
 
 
+class OnPolicyMonteCarlo(MonteCarloControl):
+    """On-policy Monte Carlo with epsilon-soft policy"""
+
+    def learn(self, epochs=200, l=1., verbose=False) -> np.ndarray:
+        Q = np.zeros((*self._env.state_space, self._env.action_space))
+        pi = EpsilonGreedyPolicy(seed=24)
+        returns = defaultdict(list)
+
+        for _ in tqdm(range(epochs), disable=not verbose):
+            trajectories = self._sample_episode(pi)
+            # Reverse the list so we start backpropagating the return from the last episode
+            trajectories.reverse()
+
+            # Learn from the episode
+            g = 0
+            for t in trajectories:
+                g = t.reward + l * g
+                returns[(*t.state, t.action)].append(g)
+                # Prediction
+                Q[t.state.dealer_first_card, t.state.player_sum, t.action] = np.squeeze(
+                    np.mean(returns[(*t.state, t.action)]))
+                # Improvement
+                pi[t.state] = np.argmax(Q[t.state.dealer_first_card, t.state.player_sum, :])
+
+        # Compute the optimal value function which is simply the value of the best action (last dimension) in each state
+        return np.max(Q, axis=2)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run Monte Carlo methods')
     parser.add_argument('--es', action='store_true', help='Execute Monte Carlo with Exploring Starts')
+    parser.add_argument('--on-policy', action='store_true',
+                        help='Execute On-policy Monte Carlo with epsilon-soft policies')
     parser.add_argument('--epochs', type=int, default=200, help='Epochs to train')
     parser.add_argument('--verbose', action='store_true', help='Run in verbose mode')
     args = parser.parse_args()
 
     # The optimal value function obtained
     V = None
+    # The algorithm to run
+    mc = None
+    # The title of the plot
+    title = None
 
     if args.es:
         print('Running Monte Carlo with Exploring Starts')
         mc = MonteCarloES()
+        title = 'monte_carlo_es'
+    elif args.on_policy:
+        print('Running On-policy Monte Carlo')
+        mc = OnPolicyMonteCarlo()
+        title = 'on_policy_monte_carlo'
+
+    if mc is not None:
         V = mc.learn(epochs=args.epochs, verbose=args.verbose)
 
     if V is not None:
@@ -119,4 +160,4 @@ if __name__ == '__main__':
         ax.set_xlabel('Dealer showing')
         ax.set_ylabel('Player sum')
         ax.set_zlabel('Value')
-        plt.savefig('output/monte_carlo_es.png', bbox_inches='tight')
+        plt.savefig(f'output/{title}.png', bbox_inches='tight')
