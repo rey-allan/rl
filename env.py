@@ -6,12 +6,25 @@ from enum import Enum
 from typing import Tuple
 
 State = namedtuple('State', ['dealer_first_card', 'player_sum'])
-Action = Enum('Action', 'hit stick')
 Color = Enum('Color', 'red black')
+
+
+class Action:
+    """Represents all possible actions"""
+    # We aren't using an enum because it's a pain having to convert
+    # back and forth between numbers and the enum types.
+    # Since actions are usually directly used with NumPy arrays in
+    # learning algorithms, it's better to explicitly keep them as such.
+    hit = 0
+    stick = 1
 
 
 class Easy21:
     """Easy21: A simplified Balckjack-like card game"""
+    action_space = 2
+    # Dealer’s first card 1–10 and the player’s sum 1–21
+    # We add 1 to account for zero-based indexing
+    state_space = (11, 22)
 
     def __init__(self, seed: int = None):
         """
@@ -22,14 +35,25 @@ class Easy21:
         self._dealer_sum = 0
         self._dealer_first_card = 0
 
-    def reset(self) -> State:
+    def reset(self, start: State = None) -> State:
         """
-        Resets the environment
+        Resets the environment with an optional starting state
 
+        :param State start: An optional starting state to reset the environment to
         :return: The initial state
         :rtype: State
         """
-        # At the start of the game both the player and the dealer draw one black card
+        self._player_sum = 0
+        self._dealer_sum = 0
+
+        if start is not None:
+            self._dealer_first_card = start.dealer_first_card
+            self._dealer_sum += start.dealer_first_card
+            self._player_sum = start.player_sum
+
+            return State(start.dealer_first_card, start.player_sum)
+
+        # By default, at the start of the game both the player and the dealer draw one black card
         dealer = Deck.draw(color=Color.black)
         player = Deck.draw(color=Color.black)
 
