@@ -33,6 +33,17 @@ class Policy(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def greedy_prob(self, s: State) -> float:
+        """
+        Returns the probability of selecting a greedy action under this policy in state `s`.
+
+        :param State s: The state to compute the greedy probability for
+        :return: The greedy probability
+        :rtype: float
+        """
+        raise NotImplementedError
+
 
 class GreedyPolicy(Policy):
     """A greedy policy that selects actions based on its current mapping"""
@@ -40,6 +51,9 @@ class GreedyPolicy(Policy):
     def __getitem__(self, s: State) -> Action:
         # Picks the action based on the current policy
         return self._pi[s.dealer_first_card, s.player_sum]
+
+    def greedy_prob(self, s: State) -> float:
+        return 1.
 
 
 class EpsilonGreedyPolicy(Policy):
@@ -62,9 +76,15 @@ class EpsilonGreedyPolicy(Policy):
     def __getitem__(self, s: State) -> Action:
         # Compute epsilon following the strategy outlined in the assignment instructions
         self._n[s] += 1
-        epsilon = self._n0 / (self._n0 + self._n[s])
+        epsilon = self._epsilon(s)
 
         if random.random() < epsilon:
             return random.choice([Action.hit, Action.stick])
 
         return self._pi[s.dealer_first_card, s.player_sum]
+
+    def greedy_prob(self, s: State) -> float:
+        return 1. - self._epsilon(s)
+
+    def _epsilon(self, s: State) -> float:
+        return self._n0 / (self._n0 + self._n[s])
