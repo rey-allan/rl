@@ -1,14 +1,12 @@
 """Implementation of different Monte Carlo methods"""
 import argparse
-import matplotlib.pyplot as plt
 import random
 import numpy as np
+import plot as plt
 
 from abc import ABC, abstractmethod
 from env import Action, Easy21, State
 from collections import defaultdict, namedtuple
-from matplotlib import cm
-from mpl_toolkits.mplot3d import Axes3D
 from policy import EpsilonGreedyPolicy, GreedyPolicy, Policy
 from typing import List
 from tqdm import tqdm
@@ -208,13 +206,6 @@ if __name__ == '__main__':
 
     if V is not None:
         # Plot the value function as a surface
-        fig = plt.figure()
-        ax = fig.gca(projection='3d')
         # Remove the state where the dealer's first card is 0 and the player's sum is 0 because these are not possible
         # They were kept in the value function to avoid having to deal with 0-index vs 1-index
-        x, y = np.meshgrid(range(1, Easy21.state_space[0]), range(1, Easy21.state_space[1]), indexing='ij')
-        surf = ax.plot_surface(x, y, V[1:, 1:], rstride=1, cstride=1, cmap=cm.viridis, linewidth=0, antialiased=False)
-        ax.set_xlabel('Dealer showing')
-        ax.set_ylabel('Player sum')
-        ax.set_zlabel('Value')
-        plt.savefig(f'output/{title}.png', bbox_inches='tight')
+        plt.plot_value_function(range(1, Easy21.state_space[0]), range(1, Easy21.state_space[1]), V[1:, 1:], title)
