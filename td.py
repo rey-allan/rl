@@ -74,9 +74,49 @@ class Sarsa(TemporalDifferenceControl):
         return np.max(Q, axis=2)
 
 
+class QLearning(TemporalDifferenceControl):
+    """Q-Learning (always off-policy)"""
+
+    def learn(self, epochs=200, alpha=0.5, gamma=0.9, verbose=False) -> np.ndarray:
+        Q = np.zeros((*self._env.state_space, self._env.action_space))
+        pi = EpsilonGreedyPolicy(seed=24)
+
+        for _ in tqdm(range(epochs), disable=not verbose):
+            s = self._env.reset()
+            done = False
+
+            while not done:
+                a = pi[s]
+                s_prime, r, done = self._env.step(a)
+
+                # Learn from the trajectory using the TD update
+                td_target = None
+
+                # If we're at a terminal state the TD target is simply the reward
+                if done:
+                    td_target = r
+                else:
+                    # Q-learning is off-policy; therefore, we greedily select the best value of the successor state
+                    # In other words, we assume we will behave optimally thereafter (i.e. a strictly greedy policy)
+                    td_target = r + gamma * np.max(Q[s_prime.dealer_first_card, s_prime.player_sum, :])
+
+                td_error = td_target - Q[s.dealer_first_card, s.player_sum, a]
+
+                # Prediction
+                Q[s.dealer_first_card, s.player_sum, a] += alpha * td_error
+                # Improvement
+                pi[s] = np.argmax(Q[s.dealer_first_card, s.player_sum, :])
+
+                s = s_prime
+
+        # Compute the optimal value function which is simply the value of the best action (last dimension) in each state
+        return np.max(Q, axis=2)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run TD methods')
     parser.add_argument('--sarsa', action='store_true', help='Execute On-policy SARSA')
+    parser.add_argument('--qlearning', action='store_true', help='Execute Q-Learning')
     parser.add_argument('--epochs', type=int, default=200, help='Epochs to train')
     parser.add_argument('--gamma', type=float, default=0.9, help='Discount factor')
     parser.add_argument('--alpha', type=float, default=0.5, help='Learning rate')
@@ -94,6 +134,10 @@ if __name__ == '__main__':
         print('Running On-policy SARSA')
         td = Sarsa()
         title = 'sarsa'
+    elif args.qlearning:
+        print('Running Q-learning')
+        td = QLearning()
+        title = 'qlearning'
 
     if td is not None:
         V = td.learn(epochs=args.epochs, alpha=args.alpha, gamma=args.gamma, verbose=args.verbose)
