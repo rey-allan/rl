@@ -5,6 +5,9 @@ import numpy as np
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 
+import matplotlib
+matplotlib.use('macosx')
+
 
 def plot_value_function(x_range: range, y_range: range, V: np.ndarray, filename: str):
     """

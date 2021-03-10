@@ -11,9 +11,6 @@ from policy import EpsilonGreedyPolicy, GreedyPolicy, Policy
 from typing import List
 from tqdm import tqdm
 
-import matplotlib
-matplotlib.use('macosx')
-
 # For reproducibility
 random.seed(0)
 
@@ -154,7 +151,7 @@ class OffPolicyMonteCarlo(MonteCarloControl):
                 # Improvement using the target policy
                 pi[t.state] = np.argmax(Q[t.state.dealer_first_card, t.state.player_sum, :])
 
-                # If the action the behavio policy sampled is not consistent with the target policy we exit early
+                # If the action the behavior policy sampled is not consistent with the target policy we exit early
                 # The reason is that we only update the target policy when there is consistency because the importance
                 # sampling weight becomes zero when the probability of seeing the action in the target policy is zero
                 # Recall the sampling ratio: pi(a|s) / b(a|s)
