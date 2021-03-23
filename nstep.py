@@ -6,7 +6,7 @@ import random
 
 from abc import ABC, abstractmethod
 from env import Easy21
-from policy import EpsilonGreedyPolicy
+from policy import EpsilonGreedyPolicy, GreedyPolicy, Policy
 from tqdm import tqdm
 
 # For reproducibility
@@ -35,12 +35,22 @@ class NStepBootstrapping(ABC):
         raise NotImplementedError
 
 
-class OnPolicyNStepSarsa(NStepBootstrapping):
-    """On-policy n-step SARSA"""
+class NStepSarsa(NStepBootstrapping):
+    """A base class defining n-step SARSA"""
+
+    def __init__(self, pi: Policy, b: Policy):
+        """
+        If `pi` is the same as `b` then this behaves as on-policy; otherwise, it follows an off-policy method with importance sampling.
+
+        :param Policy pi: The target policy to use
+        :param Policy b: The behavior policy to use
+        """
+        super().__init__()
+        self._pi = pi
+        self._b = b
 
     def learn(self, epochs=200, n=10, alpha=0.5, gamma=0.9, verbose=False) -> np.ndarray:
         Q = np.zeros((*self._env.state_space, self._env.action_space))
-        pi = EpsilonGreedyPolicy(seed=24)
 
         for _ in tqdm(range(epochs), disable=not verbose):
             states = []
@@ -50,7 +60,8 @@ class OnPolicyNStepSarsa(NStepBootstrapping):
             s = self._env.reset()
             states.append(s)
 
-            a = pi[s]
+            # Take actions according to the behavior policy
+            a = self._b[s]
             actions.append(a)
 
             # T controls the end of the episode
@@ -69,12 +80,19 @@ class OnPolicyNStepSarsa(NStepBootstrapping):
                         # Stop in the next step
                         T = t + 1
                     else:
-                        a_prime = pi[s_prime]
+                        # Use again the behavior policy for decision-making
+                        a_prime = self._b[s_prime]
                         actions.append(a_prime)
 
                 # tau is the step whose estimate is being updated
                 tau = t - n + 1
                 if tau >= 0:
+                    # Compute importance sampling ratio
+                    # Note that the importance sampling ratio starts one step later (tau + 1) because we don't include the action taken at
+                    # the current time step (tau); since it has already been taken, we want to fully learn from it and only weight subsequent ones
+                    rho = np.prod([self._pi.greedy_prob(states[i]) / self._b.greedy_prob(states[i])
+                                   for i in range(tau + 1, min(tau + n, T))])
+
                     # Compute approximate reward from the current step to n-steps later or the end of the episode (if tau + n goes beyond)
                     # Note that in the pseudocode presented by Sutton and Barto, they use (i - tau - 1) and (tau + 1) because they index the
                     # current reward as R_t+1; in this implementation, the reward is considered to be part of the current step R_t and hence
@@ -90,10 +108,12 @@ class OnPolicyNStepSarsa(NStepBootstrapping):
                     # Prediction (policy evaluation) of the *current* time step
                     s = states[tau]
                     a = actions[tau]
-                    Q[s.dealer_first_card, s.player_sum, a] += alpha * (G - Q[s.dealer_first_card, s.player_sum, a])
+                    Q[s.dealer_first_card, s.player_sum, a] += alpha * \
+                        rho * (G - Q[s.dealer_first_card, s.player_sum, a])
 
                     # Improvement of the *current* time step
-                    pi[s] = np.argmax(Q[s.dealer_first_card, s.player_sum, :])
+                    # We use the target policy for learning
+                    self._pi[s] = np.argmax(Q[s.dealer_first_card, s.player_sum, :])
 
                 # Stop when we have reached the end of the episode
                 if tau == T - 1:
@@ -105,9 +125,27 @@ class OnPolicyNStepSarsa(NStepBootstrapping):
         return np.max(Q, axis=2)
 
 
+class OnPolicyNStepSarsa(NStepSarsa):
+    """On-policy n-step SARSA"""
+
+    def __init__(self):
+        # We use the same policy for target and behavior
+        policy = EpsilonGreedyPolicy(seed=24)
+        super().__init__(pi=policy, b=policy)
+
+
+class OffPolicyNStepSarsa(NStepSarsa):
+    """Off-policy n-step SARSA"""
+
+    def __init__(self):
+        # Use a greedy policy for the target while following a different, epsilon-soft policy for behavior
+        super().__init__(pi=GreedyPolicy(), b=EpsilonGreedyPolicy(seed=24))
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run n-step methods')
     parser.add_argument('--on-policy-sarsa', action='store_true', help='Execute On-policy n-step SARSA')
+    parser.add_argument('--off-policy-sarsa', action='store_true', help='Execute Off-policy n-step SARSA')
     parser.add_argument('--epochs', type=int, default=200, help='Epochs to train')
     parser.add_argument('-n', type=int, default=10, help='n-steps to use')
     parser.add_argument('--gamma', type=float, default=0.9, help='Discount factor')
@@ -126,6 +164,10 @@ if __name__ == '__main__':
         print('Running On-policy n-step SARSA')
         n_step = OnPolicyNStepSarsa()
         title = 'on_policy_n_step_sarsa'
+    elif args.off_policy_sarsa:
+        print('Running Off-policy n-step SARSA')
+        n_step = OffPolicyNStepSarsa()
+        title = 'off_policy_n_step_sarsa'
 
     if n_step is not None:
         V = n_step.learn(epochs=args.epochs, n=args.n, alpha=args.alpha, gamma=args.gamma, verbose=args.verbose)
