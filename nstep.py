@@ -142,10 +142,88 @@ class OffPolicyNStepSarsa(NStepSarsa):
         super().__init__(pi=GreedyPolicy(), b=EpsilonGreedyPolicy(seed=24))
 
 
+class NStepTreeBackup(NStepBootstrapping):
+    """n-step Tree Backup: off-policy without importance sampling"""
+
+    def learn(self, epochs=200, n=10, alpha=0.5, gamma=0.9, verbose=False) -> np.ndarray:
+        Q = np.zeros((*self._env.state_space, self._env.action_space))
+        pi = GreedyPolicy()
+        b = EpsilonGreedyPolicy(seed=24)
+
+        for _ in tqdm(range(epochs), disable=not verbose):
+            states = []
+            actions = []
+            rewards = []
+
+            s = self._env.reset()
+            states.append(s)
+
+            # Take actions according to the behavior policy
+            a = b[s]
+            actions.append(a)
+
+            # T controls the end of the episode
+            T = np.inf
+            # t is the current time step
+            t = 0
+
+            while True:
+                if t < T:
+                    s_prime, r, done = self._env.step(actions[t])
+
+                    states.append(s_prime)
+                    rewards.append(r)
+
+                    if done:
+                        # Stop in the next step
+                        T = t + 1
+                    else:
+                        # Use again the behavior policy for decision-making
+                        a_prime = b[s_prime]
+                        actions.append(a_prime)
+
+                # tau is the step whose estimate is being updated
+                tau = t - n + 1
+                if tau >= 0:
+                    # If we are at or go beyond the end of the episode, then we initialize the approximate return using the last observed reward
+                    if tau + n >= T:
+                        G = rewards[-1]
+                    else:
+                        # We initialize the approximate reward using the expected approximate value of the last step
+                        s = states[t]
+                        G = rewards[t] + gamma * sum([pi.prob(a, s) * Q[s.dealer_first_card,
+                                                                        s.player_sum, a] for a in range(self._env.action_space)])
+
+                    # Now compute the rest of the approximate reward by perfoming the tree backup starting from the last step down through our current step tau
+                    for k in range(min(t, T - 1), tau, -1):
+                        s = states[k]
+                        G = rewards[k] + gamma * sum([pi.prob(a, s) * Q[s.dealer_first_card, s.player_sum, a]
+                                                      for a in range(self._env.action_space) if a != actions[k]]) + gamma * pi.prob(actions[k], s) * G
+
+                    # Prediction (policy evaluation) of the *current* time step
+                    s = states[tau]
+                    a = actions[tau]
+                    Q[s.dealer_first_card, s.player_sum, a] += alpha * (G - Q[s.dealer_first_card, s.player_sum, a])
+
+                    # Improvement of the *current* time step
+                    # We use the target policy for learning
+                    pi[s] = np.argmax(Q[s.dealer_first_card, s.player_sum, :])
+
+                # Stop when we have reached the end of the episode
+                if tau == T - 1:
+                    break
+
+                t += 1
+
+        # Compute the optimal value function which is simply the value of the best action (last dimension) in each state
+        return np.max(Q, axis=2)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run n-step methods')
     parser.add_argument('--on-policy-sarsa', action='store_true', help='Execute On-policy n-step SARSA')
     parser.add_argument('--off-policy-sarsa', action='store_true', help='Execute Off-policy n-step SARSA')
+    parser.add_argument('--tree-backup', action='store_true', help='Execute n-step Tree Backup')
     parser.add_argument('--epochs', type=int, default=200, help='Epochs to train')
     parser.add_argument('-n', type=int, default=10, help='n-steps to use')
     parser.add_argument('--gamma', type=float, default=0.9, help='Discount factor')
@@ -168,6 +246,10 @@ if __name__ == '__main__':
         print('Running Off-policy n-step SARSA')
         n_step = OffPolicyNStepSarsa()
         title = 'off_policy_n_step_sarsa'
+    elif args.tree_backup:
+        print('Running n-step Tree Backup')
+        n_step = NStepTreeBackup()
+        title = 'n_step_tree_backup'
 
     if n_step is not None:
         V = n_step.learn(epochs=args.epochs, n=args.n, alpha=args.alpha, gamma=args.gamma, verbose=args.verbose)
