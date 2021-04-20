@@ -89,7 +89,7 @@ class EpsilonGreedyPolicy(Policy):
         self._n = defaultdict(int)
 
     def __getitem__(self, s: State) -> Action:
-        # Compute epsilon following the strategy outlined in the assignment instructions
+        # Compute epsilon following the strategy outlined in the Easy21 assignment instructions
         self._n[s] += 1
         epsilon = self._epsilon(s)
 
