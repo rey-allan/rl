@@ -5,12 +5,13 @@ from collections import namedtuple
 from enum import Enum
 from typing import Tuple
 
-State = namedtuple('State', ['dealer_first_card', 'player_sum'])
-Color = Enum('Color', 'red black')
+State = namedtuple("State", ["dealer_first_card", "player_sum"])
+Color = Enum("Color", "red black")
 
 
 class Action:
     """Represents all possible actions"""
+
     # We aren't using an enum because it's a pain having to convert
     # back and forth between numbers and the enum types.
     # Since actions are usually directly used with NumPy arrays in
@@ -21,6 +22,7 @@ class Action:
 
 class Easy21:
     """Easy21: A simplified Balckjack-like card game"""
+
     action_space = 2
     # Dealer’s first card 1–10 and the player’s sum 1–21
     # We add 1 to account for zero-based indexing
@@ -102,8 +104,8 @@ class Easy21:
         Renders the environment's current state
         """
         print("===============")
-        print(f'Player Sum: {self._player_sum}')
-        print(f'Dealer Sum: {self._dealer_sum}')
+        print(f"Player Sum: {self._player_sum}")
+        print(f"Dealer Sum: {self._dealer_sum}")
 
     def _play_dealers_turn(self):
         #  The dealer always sticks on any sum of 17 or greater, and hits otherwise
@@ -147,11 +149,11 @@ class Deck:
         :rtype: Card
         """
         value = random.randint(1, 10)
-        color = color or random.choices([Color.red, Color.black], weights=[1./3., 2./3.], k=1)[0]
+        color = color or random.choices([Color.red, Color.black], weights=[1.0 / 3.0, 2.0 / 3.0], k=1)[0]
         return Card(value, color)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     env = Easy21(seed=24)
     s = env.reset()
 
@@ -161,8 +163,8 @@ if __name__ == '__main__':
         a = random.choice([Action.hit, Action.stick])
         s_prime, r, done = env.step(a)
 
-        print(f'Action: {a.name}')
-        print(f'Reward: {r}')
+        print(f"Action: {a.name}")
+        print(f"Reward: {r}")
 
         if done:
             env.render()

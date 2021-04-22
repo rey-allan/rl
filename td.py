@@ -113,14 +113,14 @@ class QLearning(TemporalDifferenceControl):
         return np.max(Q, axis=2)
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Run TD methods')
-    parser.add_argument('--sarsa', action='store_true', help='Execute On-policy SARSA')
-    parser.add_argument('--qlearning', action='store_true', help='Execute Q-Learning')
-    parser.add_argument('--epochs', type=int, default=200, help='Epochs to train')
-    parser.add_argument('--gamma', type=float, default=0.9, help='Discount factor')
-    parser.add_argument('--alpha', type=float, default=0.5, help='Learning rate')
-    parser.add_argument('--verbose', action='store_true', help='Run in verbose mode')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run TD methods")
+    parser.add_argument("--sarsa", action="store_true", help="Execute On-policy SARSA")
+    parser.add_argument("--qlearning", action="store_true", help="Execute Q-Learning")
+    parser.add_argument("--epochs", type=int, default=200, help="Epochs to train")
+    parser.add_argument("--gamma", type=float, default=0.9, help="Discount factor")
+    parser.add_argument("--alpha", type=float, default=0.5, help="Learning rate")
+    parser.add_argument("--verbose", action="store_true", help="Run in verbose mode")
     args = parser.parse_args()
 
     # The optimal value function obtained
@@ -131,13 +131,13 @@ if __name__ == '__main__':
     title = None
 
     if args.sarsa:
-        print('Running On-policy SARSA')
+        print("Running On-policy SARSA")
         td = Sarsa()
-        title = 'sarsa'
+        title = "sarsa"
     elif args.qlearning:
-        print('Running Q-learning')
+        print("Running Q-learning")
         td = QLearning()
-        title = 'qlearning'
+        title = "qlearning"
 
     if td is not None:
         V = td.learn(epochs=args.epochs, alpha=args.alpha, gamma=args.gamma, verbose=args.verbose)

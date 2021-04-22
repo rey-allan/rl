@@ -65,10 +65,10 @@ class GreedyPolicy(Policy):
         return self._pi[s.dealer_first_card, s.player_sum]
 
     def greedy_prob(self, s: State) -> float:
-        return 1.
+        return 1.0
 
     def prob(self, a: Action, s: State) -> float:
-        return 1. if a == self._pi[s.dealer_first_card, s.player_sum] else 0.
+        return 1.0 if a == self._pi[s.dealer_first_card, s.player_sum] else 0.0
 
 
 class EpsilonGreedyPolicy(Policy):
@@ -84,7 +84,7 @@ class EpsilonGreedyPolicy(Policy):
         super().__init__()
 
         random.seed(seed)
-        self._n0 = 100.
+        self._n0 = 100.0
         # Number of times a state has been visited
         self._n = defaultdict(int)
 
@@ -99,11 +99,11 @@ class EpsilonGreedyPolicy(Policy):
         return self._pi[s.dealer_first_card, s.player_sum]
 
     def greedy_prob(self, s: State) -> float:
-        return 1. - self._epsilon(s)
+        return 1.0 - self._epsilon(s)
 
     def prob(self, a: Action, s: State) -> float:
         eps = self._epsilon(s)
-        return 1. - eps if a == self._pi[s.dealer_first_card, s.player_sum] else eps
+        return 1.0 - eps if a == self._pi[s.dealer_first_card, s.player_sum] else eps
 
     def _epsilon(self, s: State) -> float:
         return self._n0 / (self._n0 + self._n[s])

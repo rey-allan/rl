@@ -105,8 +105,10 @@ class DynaQ(Planning):
             # should be used for stochastic environments. However, I've used this kind of update before
             # and it works much better in practice
             # We use `unravel_index` to get the state as a pair of (dealer_first_card,player_sum)
-            s_prime = np.unravel_index(np.argmax(
-                transition_probs[s.dealer_first_card, s.player_sum, a]), transition_probs[s.dealer_first_card, s.player_sum, a].shape)
+            s_prime = np.unravel_index(
+                np.argmax(transition_probs[s.dealer_first_card, s.player_sum, a]),
+                transition_probs[s.dealer_first_card, s.player_sum, a].shape,
+            )
             self._learn(pi, s, a, r, State(*s_prime), done, alpha, gamma)
 
 
@@ -188,15 +190,19 @@ class PrioritizedSweeping(Planning):
             r = self.R[s.dealer_first_card, s.player_sum, a]
             # Infer s' by using the state with the highest probability
             # We use `unravel_index` to get the state as a pair of (dealer_first_card,player_sum)
-            s_prime = np.unravel_index(np.argmax(
-                transition_probs[s.dealer_first_card, s.player_sum, a]), transition_probs[s.dealer_first_card, s.player_sum, a].shape)
+            s_prime = np.unravel_index(
+                np.argmax(transition_probs[s.dealer_first_card, s.player_sum, a]),
+                transition_probs[s.dealer_first_card, s.player_sum, a].shape,
+            )
             self._learn(pi, s, a, r, State(*s_prime), done, alpha, gamma)
 
             # Since we updated s, this update has an effect on its predecessors because its value is backed up
             # However, we don't want to update all predecessors, we want to update the (s-,a-) pair with the
             # highest probability to _lead_ to s
-            dealer_first_card, player_sum, a_bar = np.unravel_index(np.argmax(
-                transition_probs[:, :, :, s.dealer_first_card, s.player_sum]), transition_probs[:, :, :, s.dealer_first_card, s.player_sum].shape)
+            dealer_first_card, player_sum, a_bar = np.unravel_index(
+                np.argmax(transition_probs[:, :, :, s.dealer_first_card, s.player_sum]),
+                transition_probs[:, :, :, s.dealer_first_card, s.player_sum].shape,
+            )
             s_bar = State(dealer_first_card, player_sum)
             # Predict the reward
             r_bar = self.R[dealer_first_card, player_sum, a_bar]
@@ -208,16 +214,16 @@ class PrioritizedSweeping(Planning):
                 queue.push(s_bar, a_bar, td_error)
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Run planning methods')
-    parser.add_argument('--dynaq', action='store_true', help='Execute Dyna-Q')
-    parser.add_argument('--priority', action='store_true', help='Execute Prioritized sweeping')
-    parser.add_argument('--epochs', type=int, default=200, help='Epochs to train')
-    parser.add_argument('--gamma', type=float, default=0.9, help='Discount factor')
-    parser.add_argument('--alpha', type=float, default=0.5, help='Learning rate')
-    parser.add_argument('--n', type=int, default=100, help='Planning steps to use')
-    parser.add_argument('--theta', type=float, default=0.5, help='Threshold for Prioritized sweeping')
-    parser.add_argument('--verbose', action='store_true', help='Run in verbose mode')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run planning methods")
+    parser.add_argument("--dynaq", action="store_true", help="Execute Dyna-Q")
+    parser.add_argument("--priority", action="store_true", help="Execute Prioritized sweeping")
+    parser.add_argument("--epochs", type=int, default=200, help="Epochs to train")
+    parser.add_argument("--gamma", type=float, default=0.9, help="Discount factor")
+    parser.add_argument("--alpha", type=float, default=0.5, help="Learning rate")
+    parser.add_argument("--n", type=int, default=100, help="Planning steps to use")
+    parser.add_argument("--theta", type=float, default=0.5, help="Threshold for Prioritized sweeping")
+    parser.add_argument("--verbose", action="store_true", help="Run in verbose mode")
     args = parser.parse_args()
 
     # The optimal value function obtained
@@ -228,17 +234,18 @@ if __name__ == '__main__':
     title = None
 
     if args.dynaq:
-        print('Running Dyna-Q')
+        print("Running Dyna-Q")
         planner = DynaQ()
-        title = 'dynaq'
+        title = "dynaq"
     elif args.priority:
-        print('Running Prioritized sweeping')
+        print("Running Prioritized sweeping")
         planner = PrioritizedSweeping()
-        title = 'prioritized_sweeping'
+        title = "prioritized_sweeping"
 
     if planner is not None:
-        V = planner.learn(epochs=args.epochs, n=args.n, alpha=args.alpha,
-                          gamma=args.gamma, theta=args.theta, verbose=args.verbose)
+        V = planner.learn(
+            epochs=args.epochs, n=args.n, alpha=args.alpha, gamma=args.gamma, theta=args.theta, verbose=args.verbose
+        )
 
     if V is not None:
         # Plot the value function as a surface

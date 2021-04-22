@@ -14,7 +14,7 @@ from tqdm import tqdm
 # For reproducibility
 random.seed(0)
 
-Trajectory = namedtuple('Trajectory', ['state', 'action', 'reward'])
+Trajectory = namedtuple("Trajectory", ["state", "action", "reward"])
 
 
 class MonteCarloControl(ABC):
@@ -24,7 +24,7 @@ class MonteCarloControl(ABC):
         self._env = Easy21(seed=24)
 
     @abstractmethod
-    def learn(self, epochs=200, l=1., verbose=False) -> np.ndarray:
+    def learn(self, epochs=200, l=1.0, verbose=False) -> np.ndarray:
         """
         Learns the optimal value function.
 
@@ -59,7 +59,7 @@ class MonteCarloControl(ABC):
 class MonteCarloES(MonteCarloControl):
     """Monte Carlo (every visit) with Exploring Starts"""
 
-    def learn(self, epochs=200, l=1., verbose=False) -> np.ndarray:
+    def learn(self, epochs=200, l=1.0, verbose=False) -> np.ndarray:
         Q = np.zeros((*self._env.state_space, self._env.action_space))
         pi = GreedyPolicy()
         returns = defaultdict(list)
@@ -67,8 +67,9 @@ class MonteCarloES(MonteCarloControl):
         for _ in tqdm(range(epochs), disable=not verbose):
             # Select starting pair with equal probability (exploring starts)
             # We subtract 1 because `randint` ranges are inclusive
-            s_0 = State(random.randint(1, self._env.state_space[0] - 1),
-                        random.randint(1, self._env.state_space[1] - 1))
+            s_0 = State(
+                random.randint(1, self._env.state_space[0] - 1), random.randint(1, self._env.state_space[1] - 1)
+            )
             a_0 = random.choice([Action.hit, Action.stick])
             # Sample episode from that pair
             trajectories = self._sample_episode(pi, s_0, a_0)
@@ -82,7 +83,8 @@ class MonteCarloES(MonteCarloControl):
                 returns[(*t.state, t.action)].append(g)
                 # Prediction
                 Q[t.state.dealer_first_card, t.state.player_sum, t.action] = np.squeeze(
-                    np.mean(returns[(*t.state, t.action)]))
+                    np.mean(returns[(*t.state, t.action)])
+                )
                 # Improvement
                 pi[t.state] = np.argmax(Q[t.state.dealer_first_card, t.state.player_sum, :])
 
@@ -93,7 +95,7 @@ class MonteCarloES(MonteCarloControl):
 class OnPolicyMonteCarlo(MonteCarloControl):
     """On-policy Monte Carlo with epsilon-soft policy"""
 
-    def learn(self, epochs=200, l=1., verbose=False) -> np.ndarray:
+    def learn(self, epochs=200, l=1.0, verbose=False) -> np.ndarray:
         Q = np.zeros((*self._env.state_space, self._env.action_space))
         pi = EpsilonGreedyPolicy(seed=24)
         returns = defaultdict(list)
@@ -110,7 +112,8 @@ class OnPolicyMonteCarlo(MonteCarloControl):
                 returns[(*t.state, t.action)].append(g)
                 # Prediction
                 Q[t.state.dealer_first_card, t.state.player_sum, t.action] = np.squeeze(
-                    np.mean(returns[(*t.state, t.action)]))
+                    np.mean(returns[(*t.state, t.action)])
+                )
                 # Improvement
                 pi[t.state] = np.argmax(Q[t.state.dealer_first_card, t.state.player_sum, :])
 
@@ -124,7 +127,7 @@ class OffPolicyMonteCarlo(MonteCarloControl):
     It also uses an iterative implementation for computing the averages.
     """
 
-    def learn(self, epochs=200, l=1., verbose=False) -> np.ndarray:
+    def learn(self, epochs=200, l=1.0, verbose=False) -> np.ndarray:
         Q = np.zeros((*self._env.state_space, self._env.action_space))
         C = np.zeros_like(Q)
         # Target policy
@@ -140,14 +143,17 @@ class OffPolicyMonteCarlo(MonteCarloControl):
 
             # Learn from the episode
             g = 0
-            w = 1.
+            w = 1.0
             for t in trajectories:
                 g = t.reward + l * g
                 # Cumulative sum of the weights (importance sampling ratio)
                 C[t.state.dealer_first_card, t.state.player_sum, t.action] += w
                 # Prediction with iterative implementation and importance sampling
                 Q[t.state.dealer_first_card, t.state.player_sum, t.action] += (
-                    w / C[t.state.dealer_first_card, t.state.player_sum, t.action] * (g - Q[t.state.dealer_first_card, t.state.player_sum, t.action]))
+                    w
+                    / C[t.state.dealer_first_card, t.state.player_sum, t.action]
+                    * (g - Q[t.state.dealer_first_card, t.state.player_sum, t.action])
+                )
                 # Improvement using the target policy
                 pi[t.state] = np.argmax(Q[t.state.dealer_first_card, t.state.player_sum, :])
 
@@ -161,21 +167,23 @@ class OffPolicyMonteCarlo(MonteCarloControl):
                 # Update the importance sampling weight
                 # Because we now that the action is consistent with the target policy, then said action was taken greedily
                 # therefore, the probability b(a|s) is the probability of taking the greedy action under policy b for state s
-                w += 1. / b.greedy_prob(t.state)
+                w += 1.0 / b.greedy_prob(t.state)
 
         # Compute the optimal value function which is simply the value of the best action (last dimension) in each state
         return np.max(Q, axis=2)
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Run Monte Carlo methods')
-    parser.add_argument('--es', action='store_true', help='Execute Monte Carlo with Exploring Starts')
-    parser.add_argument('--on-policy', action='store_true',
-                        help='Execute On-policy Monte Carlo with epsilon-soft policies')
-    parser.add_argument('--off-policy', action='store_true',
-                        help='Execute Off-policy Monte Carlo with weighted importance sampling')
-    parser.add_argument('--epochs', type=int, default=200, help='Epochs to train')
-    parser.add_argument('--verbose', action='store_true', help='Run in verbose mode')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run Monte Carlo methods")
+    parser.add_argument("--es", action="store_true", help="Execute Monte Carlo with Exploring Starts")
+    parser.add_argument(
+        "--on-policy", action="store_true", help="Execute On-policy Monte Carlo with epsilon-soft policies"
+    )
+    parser.add_argument(
+        "--off-policy", action="store_true", help="Execute Off-policy Monte Carlo with weighted importance sampling"
+    )
+    parser.add_argument("--epochs", type=int, default=200, help="Epochs to train")
+    parser.add_argument("--verbose", action="store_true", help="Run in verbose mode")
     args = parser.parse_args()
 
     # The optimal value function obtained
@@ -186,17 +194,17 @@ if __name__ == '__main__':
     title = None
 
     if args.es:
-        print('Running Monte Carlo with Exploring Starts')
+        print("Running Monte Carlo with Exploring Starts")
         mc = MonteCarloES()
-        title = 'monte_carlo_es'
+        title = "monte_carlo_es"
     elif args.on_policy:
-        print('Running On-policy Monte Carlo')
+        print("Running On-policy Monte Carlo")
         mc = OnPolicyMonteCarlo()
-        title = 'on_policy_monte_carlo'
+        title = "on_policy_monte_carlo"
     elif args.off_policy:
-        print('Running Off-policy Monte Carlo')
+        print("Running Off-policy Monte Carlo")
         mc = OffPolicyMonteCarlo()
-        title = 'off_policy_monte_carlo'
+        title = "off_policy_monte_carlo"
 
     if mc is not None:
         V = mc.learn(epochs=args.epochs, verbose=args.verbose)
