@@ -57,6 +57,28 @@ class Policy(ABC):
         raise NotImplementedError
 
 
+class RandomPolicy(Policy):
+    """A policy that selects actions randomly with equal probability"""
+
+    def __init__(self, seed: int = None):
+        """
+        :param int seed: The seed to use for the random number generator
+        """
+        super().__init__()
+
+        random.seed(seed)
+        self._actions = [Action.hit, Action.stick]
+
+    def __getitem__(self, s: State) -> Action:
+        return random.choice(self._actions)
+
+    def greedy_prob(self, s: State) -> float:
+        return 0.0
+
+    def prob(self, a: Action, s: State) -> float:
+        return 1.0 / len(self._actions)
+
+
 class GreedyPolicy(Policy):
     """A greedy policy that selects actions based on its current mapping"""
 

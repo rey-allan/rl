@@ -36,6 +36,7 @@ class Easy21:
         self._player_sum = 0
         self._dealer_sum = 0
         self._dealer_first_card = 0
+        self._done = False
 
     def reset(self, start: State = None) -> State:
         """
@@ -47,6 +48,7 @@ class Easy21:
         """
         self._player_sum = 0
         self._dealer_sum = 0
+        self._done = False
 
         if start is not None:
             self._dealer_first_card = start.dealer_first_card
@@ -73,6 +75,9 @@ class Easy21:
         :return: A tuple of next state, reward, and done
         :rtype: Tuple[State, float, bool]
         """
+        if self._done:
+            raise RuntimeError("Cannot step into terminated episode; call `reset()`!")
+
         # If the player hits then she draws another card from the deck
         if a == Action.hit:
             card = Deck.draw()
@@ -97,6 +102,7 @@ class Easy21:
                 reward = 0
             done = True
 
+        self._done = done
         return s_prime, reward, done
 
     def render(self):

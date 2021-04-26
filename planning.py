@@ -5,13 +5,17 @@ import plot as plt
 import random
 
 from abc import ABC
-from env import Easy21, State
+from collections import defaultdict, namedtuple
+from env import Action, Easy21, State
 from heapq import heapify, heappop, heappush
-from policy import EpsilonGreedyPolicy
+from policy import EpsilonGreedyPolicy, Policy, RandomPolicy
 from tqdm import tqdm
+from typing import List
 
 # For reproducibility
 random.seed(0)
+
+Trajectory = namedtuple("Trajectory", ["state", "action", "reward"])
 
 
 class Planning(ABC):
@@ -52,7 +56,7 @@ class Planning(ABC):
 class DynaQ(Planning):
     """Dyna-Q algorithm"""
 
-    def learn(self, epochs=200, n=100, alpha=0.5, gamma=0.9, verbose=False) -> np.ndarray:
+    def learn(self, epochs=200, n=100, alpha=0.5, gamma=0.9, verbose=False, **kwargs) -> np.ndarray:
         """
         Learns the optimal value function.
 
@@ -61,6 +65,7 @@ class DynaQ(Planning):
         :param float alpha: The learning rate
         :param float gamma: The discount factor
         :param bool verbose: Whether to use verbose mode or not
+        :param dict kwargs: Extra arguments, ignored
         :return: The optimal value function
         :rtype: np.ndarray
         """
@@ -132,7 +137,7 @@ class PrioritizedSweeping(Planning):
         def empty(self):
             return len(self._heap) == 0
 
-    def learn(self, epochs=200, n=100, alpha=0.5, gamma=0.9, theta=0.5, verbose=False) -> np.ndarray:
+    def learn(self, epochs=200, n=100, alpha=0.5, gamma=0.9, theta=0.5, verbose=False, **kwargs) -> np.ndarray:
         """
         Learns the optimal value function.
 
@@ -142,6 +147,7 @@ class PrioritizedSweeping(Planning):
         :param float gamma: The discount factor
         :param float theta: The threshold that determines whether updates should be prioritized or not
         :param bool verbose: Whether to use verbose mode or not
+        :param dict kwargs: Extra arguments, ignored
         :return: The optimal value function
         :rtype: np.ndarray
         """
@@ -214,10 +220,117 @@ class PrioritizedSweeping(Planning):
                 queue.push(s_bar, a_bar, td_error)
 
 
+class MonteCarloTreeSearch(Planning):
+    """Monte Carlo Tree Search algorithm"""
+
+    def learn(self, epochs=200, n=100, gamma=0.9, verbose=False, **kwargs) -> np.ndarray:
+        """
+        Learns the optimal value function.
+
+        :param int epochs: The number of epochs to take to learn the value function
+        :param int n: The planning iterations to use
+        :param float gamma: The discount factor
+        :param bool verbose: Whether to use verbose mode or not
+        :param dict kwargs: Extra arguments, ignored
+        :return: The optimal value function
+        :rtype: np.ndarray
+        """
+        tree_policy = EpsilonGreedyPolicy(seed=24)
+        rollout_policy = RandomPolicy(seed=24)
+
+        for _ in tqdm(range(epochs), disable=not verbose):
+            done = False
+            current_state = self._env.reset()
+            explored = set()
+            # For Monte Carlo learning from the simulated experiences (averaging the returns)
+            returns = defaultdict(list)
+
+            while not done:
+                # Run MCTS
+                self._plan(n, gamma, tree_policy, rollout_policy, current_state, explored, returns)
+
+                # Action selection for the current state
+                self._env.reset(start=current_state)
+                a = tree_policy[current_state]
+                s_prime, _, done = self._env.step(a)
+                current_state = s_prime
+
+        # Compute the optimal value function which is simply the value of the best action (last dimension) in each state
+        return np.max(self.Q, axis=2)
+
+    def _plan(self, n, gamma, tree_policy, rollout_policy, current_state, explored, returns):
+        for _ in range(n):
+            tree = []
+            s = current_state
+            self._env.reset(start=s)
+
+            # Selection (traverse the tree until finding a leaf node)
+            # A leaf node is a node without explored children
+            while s in explored:
+                a = tree_policy[s]
+                s_prime, r, done = self._env.step(a)
+                tree.append(Trajectory(s, a, r))
+                s = s_prime
+                if done:
+                    break
+
+            # Expansion
+            if not done:
+                a = tree_policy[s]
+                s_prime, r, done = self._env.step(a)
+                tree.append(Trajectory(s, a, r))
+                explored.add(s)
+                s = s_prime
+
+            # Simulation
+            simulated = []
+            if not done:
+                simulated = self._sample_episode(rollout_policy, s_0=s)
+
+            # Backup
+            trajectories = tree + simulated
+            # Learning from all trajectories only for those (s,a) pairs that are part of the tree
+            to_learn_start = len(trajectories) - len(tree)
+            # Reverse the list so we start backpropagating the return from the last episode
+            trajectories.reverse()
+            g = 0
+            for i, t in enumerate(trajectories):
+                g = t.reward + gamma * g
+                returns[(*t.state, t.action)].append(g)
+
+                if i >= to_learn_start:
+                    # Prediction
+                    self.Q[t.state.dealer_first_card, t.state.player_sum, t.action] = np.squeeze(
+                        np.mean(returns[(*t.state, t.action)])
+                    )
+                    # Improvement using the tree policy
+                    tree_policy[t.state] = np.argmax(self.Q[t.state.dealer_first_card, t.state.player_sum, :])
+
+    def _sample_episode(self, pi: Policy, s_0: State = None, a_0: Action = None) -> List[Trajectory]:
+        # Samples trajectories following policy `pi` with an optional starting state-action pair
+        trajectories = []
+
+        s = self._env.reset(start=s_0)
+        a = a_0 or pi[s]
+
+        while True:
+            s_prime, r, done = self._env.step(a)
+            trajectories.append(Trajectory(s, a, r))
+
+            if done:
+                break
+
+            s = s_prime
+            a = pi[s]
+
+        return trajectories
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run planning methods")
     parser.add_argument("--dynaq", action="store_true", help="Execute Dyna-Q")
     parser.add_argument("--priority", action="store_true", help="Execute Prioritized sweeping")
+    parser.add_argument("--mcts", action="store_true", help="Executes Monte Carlo Tree Search")
     parser.add_argument("--epochs", type=int, default=200, help="Epochs to train")
     parser.add_argument("--gamma", type=float, default=0.9, help="Discount factor")
     parser.add_argument("--alpha", type=float, default=0.5, help="Learning rate")
@@ -241,6 +354,10 @@ if __name__ == "__main__":
         print("Running Prioritized sweeping")
         planner = PrioritizedSweeping()
         title = "prioritized_sweeping"
+    elif args.mcts:
+        print("Running Monte Carlo Tree Search")
+        planner = MonteCarloTreeSearch()
+        title = "mcts"
 
     if planner is not None:
         V = planner.learn(
