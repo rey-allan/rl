@@ -5,6 +5,7 @@ import random
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from env import Action, Easy21, State
+from typing import Callable, List
 
 
 class Policy(ABC):
@@ -53,6 +54,25 @@ class Policy(ABC):
         :param State s: The state
         :return: The probability
         :rtype: float
+        """
+        raise NotImplementedError
+
+
+class ApproximationPolicy(ABC):
+    """A base policy that uses function approximation. This class should not be instantiated."""
+
+    def __init__(self, epsilon: float, approximator: Callable[[State], List[float]]):
+        self._epsilon = epsilon
+        self._approximator = approximator
+
+    @abstractmethod
+    def __getitem__(self, s: State) -> Action:
+        """
+        Retrieves the action for the given state.
+
+        :param State s: The state to retrieve an action for
+        :return: The action
+        :rtype: Action
         """
         raise NotImplementedError
 
@@ -129,3 +149,24 @@ class EpsilonGreedyPolicy(Policy):
 
     def _epsilon(self, s: State) -> float:
         return self._n0 / (self._n0 + self._n[s])
+
+
+class EpsilonGreedyApproximationPolicy(ApproximationPolicy):
+    """
+    An epsilon greedy policy that selects random actions with probability epsilon.
+    """
+
+    def __init__(self, epsilon: float, approximator: Callable[[State], List[float]], seed: int = None):
+        """
+        :param float epsilon: The exploration factor
+        :param Callable approximator: The approximator that generates values for all actions in the given state
+        :param int seed: The seed to use for the random number generator
+        """
+        super().__init__(epsilon, approximator)
+        random.seed(seed)
+
+    def __getitem__(self, s: State) -> Action:
+        if random.random() < self._epsilon:
+            return random.choice([Action.hit, Action.stick])
+
+        return np.argmax(self._approximator(s))
