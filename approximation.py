@@ -2,11 +2,16 @@
 import argparse
 import numpy as np
 import plot as plt
+import random
 
 from env import Action, Easy21, State
 from mc import MonteCarloControl
 from policy import EpsilonGreedyApproximationPolicy
 from tqdm import tqdm
+
+# For reproducibility
+random.seed(0)
+np.random.seed(0)
 
 
 def encode(s: State, a: Action) -> np.ndarray:
@@ -44,7 +49,7 @@ def encode(s: State, a: Action) -> np.ndarray:
 class OnPolicyGradientMonteCarlo(MonteCarloControl):
     """On-policy gradient Monte Carlo with epsilon-soft policy"""
 
-    def learn(self, epochs=200, alpha=0.01, l=1.0, verbose=False) -> np.ndarray:
+    def learn(self, epochs=200, alpha=0.01, l=1.0, verbose=False, **kwargs) -> np.ndarray:
         w = np.random.rand(36)
         approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
         # Constant exploration as in the Easy21 assignment
@@ -72,13 +77,56 @@ class OnPolicyGradientMonteCarlo(MonteCarloControl):
         return np.array(values)
 
 
+class SemiGradientTDZero:
+    """Semi-gradient TD(0) with epsilon-soft policy"""
+
+    def __init__(self):
+        self._env = Easy21(seed=24)
+
+    def learn(self, epochs=200, alpha=0.01, gamma=0.9, verbose=False, **kwargs) -> np.ndarray:
+        w = np.random.rand(36)
+        approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
+        # Constant exploration as in the Easy21 assignment
+        pi = EpsilonGreedyApproximationPolicy(epsilon=0.05, approximator=approximator, seed=24)
+
+        for _ in tqdm(range(epochs), disable=not verbose):
+            s = self._env.reset()
+            done = False
+
+            while not done:
+                a = pi[s]
+                s_prime, r, done = self._env.step(a)
+
+                # Compute the TD target
+                if done:
+                    td_target = r
+                else:
+                    td_target = r + gamma * np.max(approximator(s_prime))
+
+                # SGD update
+                x = encode(s, a)
+                w += alpha * (td_target - np.dot(x, w)) * x
+
+                s = s_prime
+
+        # Compute the optimal value function which is simply the value of the best action in each state
+        values = np.zeros(self._env.state_space)
+        for d in range(self._env.state_space[0]):
+            for p in range(self._env.state_space[1]):
+                values[d, p] = np.max(approximator(State(d, p)))
+
+        return np.array(values)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run approximation methods")
     parser.add_argument(
         "--on-policy-mc", action="store_true", help="Execute On-policy gradient Monte Carlo with epsilon-soft policy"
     )
+    parser.add_argument("--td-zero", action="store_true", help="Execute Semi-gradient TD(0) with epsilon-soft policy")
     parser.add_argument("--epochs", type=int, default=200, help="Epochs to train")
     parser.add_argument("--alpha", type=float, default=0.01, help="Learning rate to use")
+    parser.add_argument("--gamma", type=float, default=0.9, help="Discount factor")
     parser.add_argument("--verbose", action="store_true", help="Run in verbose mode")
     args = parser.parse_args()
 
@@ -93,9 +141,13 @@ if __name__ == "__main__":
         print("Running On-policy Gradient Monte Carlo")
         approx = OnPolicyGradientMonteCarlo()
         title = "grad_on_policy_monte_carlo"
+    elif args.td_zero:
+        print("Running Semi-gradient TD(0)")
+        approx = SemiGradientTDZero()
+        title = "semi_grad_td_zero"
 
     if approx is not None:
-        V = approx.learn(epochs=args.epochs, alpha=args.alpha, verbose=args.verbose)
+        V = approx.learn(epochs=args.epochs, alpha=args.alpha, gamma=args.gamma, verbose=args.verbose)
 
     if V is not None:
         # Plot the value function as a surface
