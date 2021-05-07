@@ -50,6 +50,16 @@ class OnPolicyGradientMonteCarlo(MonteCarloControl):
     """On-policy gradient Monte Carlo with epsilon-soft policy"""
 
     def learn(self, epochs=200, alpha=0.01, l=1.0, verbose=False, **kwargs) -> np.ndarray:
+        """
+        Learns the optimal value function.
+
+        :param int epochs: The number of epochs to take to learn the value function
+        :param float alpha: The learning rate
+        :param float l: The discount factor lambda
+        :param bool verbose: Whether to use verbose mode or not
+        :return: The optimal value function
+        :rtype: np.ndarray
+        """
         w = np.random.rand(36)
         approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
         # Constant exploration as in the Easy21 assignment
@@ -84,6 +94,16 @@ class SemiGradientTDZero:
         self._env = Easy21(seed=24)
 
     def learn(self, epochs=200, alpha=0.01, gamma=0.9, verbose=False, **kwargs) -> np.ndarray:
+        """
+        Learns the optimal value function.
+
+        :param int epochs: The number of epochs to take to learn the value function
+        :param float alpha: The learning rate
+        :param float gamma: The discount factor
+        :param bool verbose: Whether to use verbose mode or not
+        :return: The optimal value function
+        :rtype: np.ndarray
+        """
         w = np.random.rand(36)
         approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
         # Constant exploration as in the Easy21 assignment
@@ -118,15 +138,101 @@ class SemiGradientTDZero:
         return np.array(values)
 
 
+class SemiGradientNStepTD:
+    """Semi-gradient n-step TD with epsilon-soft policy"""
+
+    def __init__(self):
+        self._env = Easy21(seed=24)
+
+    def learn(self, epochs=200, n=10, alpha=0.5, gamma=0.9, verbose=False, **kwargs) -> np.ndarray:
+        """
+        Learns the optimal value function.
+
+        :param int epochs: The number of epochs to take to learn the value function
+        :param int n: The n-steps to use
+        :param float alpha: The learning rate
+        :param float gamma: The discount factor
+        :param bool verbose: Whether to use verbose mode or not
+        :return: The optimal value function
+        :rtype: np.ndarray
+        """
+        w = np.random.rand(36)
+        approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
+        # Constant exploration as in the Easy21 assignment
+        pi = EpsilonGreedyApproximationPolicy(epsilon=0.05, approximator=approximator, seed=24)
+
+        for _ in tqdm(range(epochs), disable=not verbose):
+            states = []
+            rewards = []
+            actions = []
+
+            s = self._env.reset()
+            states.append(s)
+
+            # T controls the end of the episode
+            T = np.inf
+            # t is the current time step
+            t = 0
+
+            while True:
+                if t < T:
+                    a = pi[s]
+                    s_prime, r, done = self._env.step(a)
+
+                    states.append(s_prime)
+                    actions.append(a)
+                    rewards.append(r)
+
+                    if done:
+                        # Stop in the next step
+                        T = t + 1
+
+                # tau is the step whose estimate is being updated
+                tau = t - n + 1
+                if tau >= 0:
+                    # Compute approximate reward from the current step to n-steps later or the end of the episode (if tau + n goes beyond)
+                    # Note that in the pseudocode presented by Sutton and Barto, they use (i - tau - 1) and (tau + 1) because they index the
+                    # current reward as R_t+1; in this implementation, the reward is considered to be part of the current step R_t and hence
+                    # we used tau instead of tau + 1
+                    G = sum([gamma ** (i - tau) * rewards[i] for i in range(tau, min(tau + n, T))])
+
+                    # Bootstrap the missing values if the we're not at the end of the episode using the approximator
+                    if tau + n < T:
+                        s = states[tau + n]
+                        G += gamma ** n * np.max(approximator(s))
+
+                    # SGD update
+                    x = encode(states[tau], actions[tau])
+                    w += alpha * (G - np.dot(x, w)) * x
+
+                # Stop when we have reached the end of the episode
+                if tau == T - 1:
+                    break
+
+                t += 1
+
+        # Compute the optimal value function which is simply the value of the best action in each state
+        values = np.zeros(self._env.state_space)
+        for d in range(self._env.state_space[0]):
+            for p in range(self._env.state_space[1]):
+                values[d, p] = np.max(approximator(State(d, p)))
+
+        return np.array(values)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run approximation methods")
     parser.add_argument(
         "--on-policy-mc", action="store_true", help="Execute On-policy gradient Monte Carlo with epsilon-soft policy"
     )
     parser.add_argument("--td-zero", action="store_true", help="Execute Semi-gradient TD(0) with epsilon-soft policy")
+    parser.add_argument(
+        "--nstep-td", action="store_true", help="Execute Semi-gradient n-step TD with epsilon-soft policy"
+    )
     parser.add_argument("--epochs", type=int, default=200, help="Epochs to train")
     parser.add_argument("--alpha", type=float, default=0.01, help="Learning rate to use")
     parser.add_argument("--gamma", type=float, default=0.9, help="Discount factor")
+    parser.add_argument("-n", type=int, default=10, help="n-steps to use")
     parser.add_argument("--verbose", action="store_true", help="Run in verbose mode")
     args = parser.parse_args()
 
@@ -145,9 +251,13 @@ if __name__ == "__main__":
         print("Running Semi-gradient TD(0)")
         approx = SemiGradientTDZero()
         title = "semi_grad_td_zero"
+    elif args.nstep_td:
+        print("Running Semi-gradient n-step TD")
+        approx = SemiGradientNStepTD()
+        title = "semi_grad_nstep_td"
 
     if approx is not None:
-        V = approx.learn(epochs=args.epochs, alpha=args.alpha, gamma=args.gamma, verbose=args.verbose)
+        V = approx.learn(epochs=args.epochs, alpha=args.alpha, gamma=args.gamma, n=args.n, verbose=args.verbose)
 
     if V is not None:
         # Plot the value function as a surface
