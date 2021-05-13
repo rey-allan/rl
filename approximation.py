@@ -220,6 +220,61 @@ class SemiGradientNStepTD:
         return np.array(values)
 
 
+class SemiGradientSarsa:
+    """On-policy semi-gradient SARSA with epsilon-soft policy"""
+
+    def __init__(self):
+        self._env = Easy21(seed=24)
+
+    def learn(self, epochs=200, alpha=0.5, gamma=0.9, verbose=False, **kwargs) -> np.ndarray:
+        """
+        Learns the optimal value function.
+
+        :param int epochs: The number of epochs to take to learn the value function
+        :param float alpha: The learning rate
+        :param float gamma: The discount factor
+        :param bool verbose: Whether to use verbose mode or not
+        :return: The optimal value function
+        :rtype: np.ndarray
+        """
+        w = np.random.rand(36)
+        approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
+        # Constant exploration as in the Easy21 assignment
+        pi = EpsilonGreedyApproximationPolicy(epsilon=0.05, approximator=approximator, seed=24)
+
+        for _ in tqdm(range(epochs), disable=not verbose):
+            s = self._env.reset()
+            a = pi[s]
+            done = False
+
+            while not done:
+                # Generate S,A,R,S',A' trajectory
+                s_prime, r, done = self._env.step(a)
+
+                # Compute the TD target
+                if done:
+                    a_prime = None
+                    td_target = r
+                else:
+                    a_prime = pi[s_prime]
+                    td_target = r + gamma * np.dot(encode(s_prime, a_prime), w)
+
+                # SGD update
+                x = encode(s, a)
+                w += alpha * (td_target - np.dot(x, w)) * x
+
+                s = s_prime
+                a = a_prime
+
+        # Compute the optimal value function which is simply the value of the best action in each state
+        values = np.zeros(self._env.state_space)
+        for d in range(self._env.state_space[0]):
+            for p in range(self._env.state_space[1]):
+                values[d, p] = np.max(approximator(State(d, p)))
+
+        return np.array(values)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run approximation methods")
     parser.add_argument(
@@ -229,6 +284,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--nstep-td", action="store_true", help="Execute Semi-gradient n-step TD with epsilon-soft policy"
     )
+    parser.add_argument("--sarsa", action="store_true", help="Execute Semi-gradient SARSA with epsilon-soft policy")
     parser.add_argument("--epochs", type=int, default=200, help="Epochs to train")
     parser.add_argument("--alpha", type=float, default=0.01, help="Learning rate to use")
     parser.add_argument("--gamma", type=float, default=0.9, help="Discount factor")
@@ -255,6 +311,10 @@ if __name__ == "__main__":
         print("Running Semi-gradient n-step TD")
         approx = SemiGradientNStepTD()
         title = "semi_grad_nstep_td"
+    elif args.gamma:
+        print("Running Semi-gradient SARSA")
+        approx = SemiGradientSarsa()
+        title = "semi_grad_sarsa"
 
     if approx is not None:
         V = approx.learn(epochs=args.epochs, alpha=args.alpha, gamma=args.gamma, n=args.n, verbose=args.verbose)
