@@ -46,7 +46,7 @@ def encode(s: State, a: Action) -> np.ndarray:
 
 
 class SemiGradientTDLambda:
-    """Semi-gradient TD(Lambda) with epsilon-soft policy"""
+    """Semi-gradient TD(lambda) with epsilon-soft policy"""
 
     def __init__(self):
         self._env = Easy21(seed=24)
@@ -101,10 +101,73 @@ class SemiGradientTDLambda:
         return values
 
 
+class SemiGradientSarsaLambda:
+    """On-policy semi-gradient SARSA(lambda) with epsilon-soft policy"""
+
+    def __init__(self):
+        self._env = Easy21(seed=24)
+
+    def learn(self, epochs=200, alpha=0.01, gamma=0.9, l=1.0, verbose=False, **kwargs) -> np.ndarray:
+        """
+        Learns the optimal value function.
+
+        :param int epochs: The number of epochs to take to learn the value function
+        :param float alpha: The learning rate
+        :param float gamma: The discount factor
+        :param float l: The lambda value for the eligibility trace update
+        :param bool verbose: Whether to use verbose mode or not
+        :return: The optimal value function
+        :rtype: np.ndarray
+        """
+        w = np.random.rand(36)
+        approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
+        # Constant exploration as in the Easy21 assignment
+        pi = EpsilonGreedyApproximationPolicy(epsilon=0.05, approximator=approximator, seed=24)
+        # The eligibility trace vector
+        z = np.zeros_like(w)
+
+        for _ in tqdm(range(epochs), disable=not verbose):
+            s = self._env.reset()
+            a = pi[s]
+            done = False
+
+            while not done:
+                # Generate S,A,R,S',A' trajectory
+                s_prime, r, done = self._env.step(a)
+
+                # Compute the TD target
+                if done:
+                    a_prime = None
+                    td_target = r
+                else:
+                    a_prime = pi[s_prime]
+                    td_target = r + gamma * np.dot(encode(s_prime, a_prime), w)
+
+                x = encode(s, a)
+                # Update the trace
+                z = l * gamma * z + x
+                # SGD update
+                w += alpha * (td_target - np.dot(x, w)) * z
+
+                s = s_prime
+                a = a_prime
+
+        # Compute the optimal value function which is simply the value of the best action in each state
+        values = np.zeros(self._env.state_space)
+        for d in range(self._env.state_space[0]):
+            for p in range(self._env.state_space[1]):
+                values[d, p] = np.max(approximator(State(d, p)))
+
+        return values
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run eligibility trace methods")
     parser.add_argument(
-        "--td-lambda", action="store_true", help="Execute Semi-radient TD(lambda) with epsilon-soft policy"
+        "--td-lambda", action="store_true", help="Execute Semi-gradient TD(lambda) with epsilon-soft policy"
+    )
+    parser.add_argument(
+        "--sarsa-lambda", action="store_true", help="Execute Semi-gradient SARSA(lambda) with epsilon-soft policy"
     )
     parser.add_argument("--epochs", type=int, default=200, help="Epochs to train")
     parser.add_argument("--alpha", type=float, default=0.01, help="Learning rate to use")
@@ -124,6 +187,10 @@ if __name__ == "__main__":
         print("Running Semi-gradient TD(lambda)")
         eligibility = SemiGradientTDLambda()
         title = "semi_grad_td_lambda"
+    elif args.sarsa_lambda:
+        print("Running Semi-gradient SARSA(lambda)")
+        eligibility = SemiGradientSarsaLambda()
+        title = "semi_grad_sarsa_lambda"
 
     if eligibility is not None:
         V = eligibility.learn(epochs=args.epochs, alpha=args.alpha, gamma=args.gamma, l=args.l, verbose=args.verbose)
