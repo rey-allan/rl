@@ -67,12 +67,12 @@ class SemiGradientTDLambda:
         approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
         # Constant exploration as in the Easy21 assignment
         pi = EpsilonGreedyApproximationPolicy(epsilon=0.05, approximator=approximator, seed=24)
-        # The eligibility trace vector
-        z = np.zeros_like(w)
 
         for _ in tqdm(range(epochs), disable=not verbose):
             s = self._env.reset()
             done = False
+            # The eligibility trace vector
+            z = np.zeros_like(w)
 
             while not done:
                 a = pi[s]
@@ -123,13 +123,13 @@ class SemiGradientSarsaLambda:
         approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
         # Constant exploration as in the Easy21 assignment
         pi = EpsilonGreedyApproximationPolicy(epsilon=0.05, approximator=approximator, seed=24)
-        # The eligibility trace vector
-        z = np.zeros_like(w)
 
         for _ in tqdm(range(epochs), disable=not verbose):
             s = self._env.reset()
             a = pi[s]
             done = False
+            # The eligibility trace vector
+            z = np.zeros_like(w)
 
             while not done:
                 # Generate S,A,R,S',A' trajectory
