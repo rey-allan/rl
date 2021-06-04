@@ -218,16 +218,113 @@ class OneStepActorCritic:
         return values
 
 
+class ActorCriticWithEligibilityTraces:
+    """
+    Actor-Critic with eligibility traces
+
+    Uses softmax on linear action preferences for the policy, and
+    linear approximation for the value function. Feature vectors
+    are computed using coarse coding as described in the Easy21
+    assignment.
+    """
+
+    def __init__(self):
+        self._env = Easy21(seed=24)
+
+    def learn(
+        self,
+        epochs=200,
+        alpha_policy=0.01,
+        alpha_value=0.01,
+        gamma=0.9,
+        lambda_value=1.0,
+        lambda_policy=1.0,
+        verbose=False,
+        **kwargs
+    ) -> np.ndarray:
+        """
+        Learns the optimal value function.
+
+        :param int epochs: The number of epochs to take to learn the value function
+        :param float alpha_policy: The learning rate for the policy approximation
+        :param float alpha_value: The learning rate for the value approximation
+        :param float gamma: The discount factor
+        :param float lambda_value: The trace decay rate for the value approximation
+        :param float lambda_policy: The trace decay rate for the policy approximation
+        :param bool verbose: Whether to use verbose mode or not
+        :return: The optimal value function
+        :rtype: np.ndarray
+        """
+        # Value function
+        w = np.random.rand(36)
+        value_approximator = lambda s: [np.dot(w, encode(s, a)) for a in [Action.hit, Action.stick]]
+        # Policy function
+        theta = np.random.rand(36)
+        pi = lambda s, theta: softmax(np.array([np.dot(theta, encode(s, a)) for a in [Action.hit, Action.stick]]))
+        # The policy selects the action with some constant exploration as in the Easy21 assignment
+        policy = (
+            lambda s: random.choice([Action.hit, Action.stick]) if random.random() < 0.05 else np.argmax(pi(s, theta))
+        )
+
+        for _ in tqdm(range(epochs), disable=not verbose):
+            I = 1
+            s = self._env.reset()
+            done = False
+            z_w = np.zeros_like(w)
+            z_theta = np.zeros_like(theta)
+
+            while not done:
+                a = policy(s)
+                s_prime, r, done = self._env.step(a)
+
+                # Compute the delta
+                if done:
+                    delta = r - np.dot(w, encode(s, a))
+                else:
+                    delta = r + gamma * np.max(value_approximator(s_prime)) - np.dot(w, encode(s, a))
+
+                # SGD update of the value function
+                x = encode(s, a)
+                z_w = gamma * lambda_value * z_w + x
+                w += alpha_value * delta * z_w
+
+                # SGD update of the policy function
+                probs = pi(s, theta)
+                eligibility_vector = x - np.sum([p * encode(s, a) for a, p in enumerate(probs)])
+                z_theta = gamma * lambda_policy * z_theta + I * eligibility_vector
+                theta += alpha_policy * delta * z_theta
+
+                I *= gamma
+                s = s_prime
+
+        # Compute the optimal value function which is simply the value of the best action in each state
+        values = np.zeros(self._env.state_space)
+        for d in range(self._env.state_space[0]):
+            for p in range(self._env.state_space[1]):
+                values[d, p] = np.max(value_approximator(State(d, p)))
+
+        return values
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run policy gradient methods")
     parser.add_argument("--reinforce-with-baseline", action="store_true", help="Execute REINFORCE with Baseline")
     parser.add_argument("--one-step-ac", action="store_true", help="Execute One-step Actor-Critic")
+    parser.add_argument(
+        "--ac-eligibility-traces", action="store_true", help="Execute Actor-Critic with eligibility traces"
+    )
     parser.add_argument("--epochs", type=int, default=200, help="Epochs to train")
     parser.add_argument(
         "--alpha-value", type=float, default=0.01, help="Learning rate to use for the value function approximation"
     )
     parser.add_argument(
         "--alpha-policy", type=float, default=0.01, help="Learning rate to use for the policy function approximation"
+    )
+    parser.add_argument(
+        "--lambda-value", type=float, default=1.0, help="Trace decay rate to use for the value function approximation"
+    )
+    parser.add_argument(
+        "--lambda-policy", type=float, default=1.0, help="Trace decay rate to use for the policy function approximation"
     )
     parser.add_argument("--gamma", type=float, default=0.9, help="Discount factor")
     parser.add_argument("--verbose", action="store_true", help="Run in verbose mode")
@@ -248,12 +345,18 @@ if __name__ == "__main__":
         print("Running One-step Actor-Critic")
         policy_grad = OneStepActorCritic()
         title = "one_step_actor_critic"
+    elif args.ac_eligibility_traces:
+        print("Running Actor-Critic with eligibility traces")
+        policy_grad = ActorCriticWithEligibilityTraces()
+        title = "actor_critic_eligibility_traces"
 
     if policy_grad is not None:
         V = policy_grad.learn(
             epochs=args.epochs,
             alpha_value=args.alpha_value,
             alpha_policy=args.alpha_policy,
+            lambda_value=args.lambda_value,
+            lambda_policy=args.lambda_policy,
             gamma=args.gamma,
             verbose=args.verbose,
         )
