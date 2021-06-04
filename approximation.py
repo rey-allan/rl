@@ -61,7 +61,7 @@ class OnPolicyGradientMonteCarlo(MonteCarloControl):
         :rtype: np.ndarray
         """
         w = np.random.rand(36)
-        approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
+        approximator = lambda s: [np.dot(w, encode(s, a)) for a in [Action.hit, Action.stick]]
         # Constant exploration as in the Easy21 assignment
         pi = EpsilonGreedyApproximationPolicy(epsilon=0.05, approximator=approximator, seed=24)
 
@@ -76,7 +76,7 @@ class OnPolicyGradientMonteCarlo(MonteCarloControl):
                 g = t.reward + l * g
                 # SGD update
                 x = encode(t.state, t.action)
-                w += alpha * (g - np.dot(x, w)) * x
+                w += alpha * (g - np.dot(w, x)) * x
 
         # Compute the optimal value function which is simply the value of the best action in each state
         values = np.zeros(self._env.state_space)
@@ -105,7 +105,7 @@ class SemiGradientTDZero:
         :rtype: np.ndarray
         """
         w = np.random.rand(36)
-        approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
+        approximator = lambda s: [np.dot(w, encode(s, a)) for a in [Action.hit, Action.stick]]
         # Constant exploration as in the Easy21 assignment
         pi = EpsilonGreedyApproximationPolicy(epsilon=0.05, approximator=approximator, seed=24)
 
@@ -125,7 +125,7 @@ class SemiGradientTDZero:
 
                 # SGD update
                 x = encode(s, a)
-                w += alpha * (td_target - np.dot(x, w)) * x
+                w += alpha * (td_target - np.dot(w, x)) * x
 
                 s = s_prime
 
@@ -157,7 +157,7 @@ class SemiGradientNStepTD:
         :rtype: np.ndarray
         """
         w = np.random.rand(36)
-        approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
+        approximator = lambda s: [np.dot(w, encode(s, a)) for a in [Action.hit, Action.stick]]
         # Constant exploration as in the Easy21 assignment
         pi = EpsilonGreedyApproximationPolicy(epsilon=0.05, approximator=approximator, seed=24)
 
@@ -203,7 +203,7 @@ class SemiGradientNStepTD:
 
                     # SGD update
                     x = encode(states[tau], actions[tau])
-                    w += alpha * (G - np.dot(x, w)) * x
+                    w += alpha * (G - np.dot(w, x)) * x
 
                 # Stop when we have reached the end of the episode
                 if tau == T - 1:
@@ -238,7 +238,7 @@ class SemiGradientSarsa:
         :rtype: np.ndarray
         """
         w = np.random.rand(36)
-        approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
+        approximator = lambda s: [np.dot(w, encode(s, a)) for a in [Action.hit, Action.stick]]
         # Constant exploration as in the Easy21 assignment
         pi = EpsilonGreedyApproximationPolicy(epsilon=0.05, approximator=approximator, seed=24)
 
@@ -257,11 +257,11 @@ class SemiGradientSarsa:
                     td_target = r
                 else:
                     a_prime = pi[s_prime]
-                    td_target = r + gamma * np.dot(encode(s_prime, a_prime), w)
+                    td_target = r + gamma * np.dot(w, encode(s_prime, a_prime))
 
                 # SGD update
                 x = encode(s, a)
-                w += alpha * (td_target - np.dot(x, w)) * x
+                w += alpha * (td_target - np.dot(w, x)) * x
 
                 s = s_prime
                 a = a_prime
@@ -294,7 +294,7 @@ class SemiGradientNStepSarsa:
         :rtype: np.ndarray
         """
         w = np.random.rand(36)
-        approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
+        approximator = lambda s: [np.dot(w, encode(s, a)) for a in [Action.hit, Action.stick]]
         # Constant exploration as in the Easy21 assignment
         pi = EpsilonGreedyApproximationPolicy(epsilon=0.05, approximator=approximator, seed=24)
 
@@ -341,13 +341,13 @@ class SemiGradientNStepSarsa:
                     if tau + n < T:
                         s = states[tau + n]
                         a = actions[tau + n]
-                        G += gamma ** n * np.dot(encode(s, a), w)
+                        G += gamma ** n * np.dot(w, encode(s, a))
 
                     # SGD update of the *current* time step
                     s = states[tau]
                     a = actions[tau]
                     x = encode(s, a)
-                    w += alpha * (G - np.dot(x, w)) * x
+                    w += alpha * (G - np.dot(w, x)) * x
 
                 # Stop when we have reached the end of the episode
                 if tau == T - 1:

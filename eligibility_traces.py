@@ -64,7 +64,7 @@ class SemiGradientTDLambda:
         :rtype: np.ndarray
         """
         w = np.random.rand(36)
-        approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
+        approximator = lambda s: [np.dot(w, encode(s, a)) for a in [Action.hit, Action.stick]]
         # Constant exploration as in the Easy21 assignment
         pi = EpsilonGreedyApproximationPolicy(epsilon=0.05, approximator=approximator, seed=24)
 
@@ -88,7 +88,7 @@ class SemiGradientTDLambda:
                 # Update the trace
                 z = l * gamma * z + x
                 # SGD update
-                w += alpha * (td_target - np.dot(x, w)) * z
+                w += alpha * (td_target - np.dot(w, x)) * z
 
                 s = s_prime
 
@@ -120,7 +120,7 @@ class SemiGradientSarsaLambda:
         :rtype: np.ndarray
         """
         w = np.random.rand(36)
-        approximator = lambda s: [np.dot(encode(s, a), w) for a in [Action.hit, Action.stick]]
+        approximator = lambda s: [np.dot(w, encode(s, a)) for a in [Action.hit, Action.stick]]
         # Constant exploration as in the Easy21 assignment
         pi = EpsilonGreedyApproximationPolicy(epsilon=0.05, approximator=approximator, seed=24)
 
@@ -141,13 +141,13 @@ class SemiGradientSarsaLambda:
                     td_target = r
                 else:
                     a_prime = pi[s_prime]
-                    td_target = r + gamma * np.dot(encode(s_prime, a_prime), w)
+                    td_target = r + gamma * np.dot(w, encode(s_prime, a_prime))
 
                 x = encode(s, a)
                 # Update the trace
                 z = l * gamma * z + x
                 # SGD update
-                w += alpha * (td_target - np.dot(x, w)) * z
+                w += alpha * (td_target - np.dot(w, x)) * z
 
                 s = s_prime
                 a = a_prime
