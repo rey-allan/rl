@@ -56,7 +56,7 @@ All algorithms were implemented to solve a simplified version of Blackjack calle
 
 ## Results
 
-Each algorithm computed the _optimal_ value function for the Easy21 environmen. The following figure shows plots of these value functions for each of the algorithms listed above (always starting from the left in each row). Each individual plot can be found inside the `output/` directory.
+Each algorithm computed the _optimal_ value function for the Easy21 environment. The following figure shows plots of these value functions for each of the algorithms listed above (always starting from the left in each row). Each individual plot can be found inside the `output/` directory.
 
 <p align="center">
   <img src="output/monte_carlo_es.png" width="19%" />
